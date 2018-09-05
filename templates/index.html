@@ -1,0 +1,237 @@
+<html>
+<title>Analysis</title>
+
+<head>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+
+    <!-- jQuery library -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+
+    <!-- Latest compiled JavaScript -->
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.10.16/css/jquery.dataTables.min.css">
+    <script src="https://cdn.datatables.net/1.10.16/js/jquery.dataTables.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/2.0.1/css/toastr.css" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/2.0.1/js/toastr.js"></script>
+    <style>
+        .roundl {
+            width: 72px;
+            height: 72px;
+            border: 0;
+            margin: 0 32px 6px 32px;
+            border-radius: 50%;
+            -moz-border-radius: 50%;
+            -webkit-border-radius: 50%;
+        }
+
+        .rounds {
+            width: 48px;
+            height: 48px;
+            border: 0;
+            border-radius: 50%;
+            -moz-border-radius: 50%;
+            -webkit-border-radius: 50%;
+        }
+
+        pre {
+            outline: 1px solid #ccc;
+            padding: 5px;
+            margin: 5px;
+        }
+
+        .string {
+            color: green;
+        }
+
+        .number {
+            color: darkorange;
+        }
+
+        .boolean {
+            color: blue;
+        }
+
+        .null {
+            color: magenta;
+        }
+
+        .key {
+            color: red;
+        }
+
+        html,
+        body,
+        #map {
+            height: 100%;
+            margin: 0px;
+            padding: 0px;
+            font-family: "Lucida Console", Monaco, monospace;
+            color: #444;
+        }
+    </style>
+    <script>
+        var userMarker;
+        function syntaxHighlight(json) {
+            json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            return json.replace(
+                /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+                function (match) {
+                    var cls = 'number';
+                    if (/^"/.test(match)) {
+                        if (/:$/.test(match)) {
+                            cls = 'key';
+                        } else {
+                            cls = 'string';
+                        }
+                    } else if (/true|false/.test(match)) {
+                        cls = 'boolean';
+                    } else if (/null/.test(match)) {
+                        cls = 'null';
+                    }
+                    return '<span class="' + cls + '">' + match + '</span>';
+                });
+        }
+
+        function showUserInfo(marker) {
+            if($('#ipText').css('display') !== undefined && $('#ipText').css('display').length!== 0){
+                return;
+            }
+            var contentString = '<div id="content">' +
+                '<div id="siteNotice">' +
+                '</div>' +
+                '<h1 id="firstHeading" class="firstHeading">UserInfo</h1>' +
+                '<div id="bodyContent">' +
+                '<div id="ipText"></div>' +
+                '</div>' +
+                '</div>';
+            var option = {
+                postion: map.getCenter(),
+                disabledAutoPlan: true,
+                content: contentString
+
+            }
+            iw = new google.maps.InfoWindow(option);
+            iw.open(map, marker);
+            //$('#embed_content').html('<i class="fa fa-refresh fa-spin fa-3x"></i>');
+            var settings = {
+                "url": "/getIPaddress",
+                "method": "GET"
+            }
+            $.ajax(settings).done(function (response) {
+                if($('#ipText').text().length == 0){
+                    $('#ipText').append(syntaxHighlight(response));
+                }
+            }).fail(function () {
+                $('#embed_content').add(new Text("Unable to locate this user."));
+            });
+        }
+
+        function addControls() {
+            map.controls[google.maps.ControlPosition.TOP_LEFT].push(document.getElementById('logo'));
+            map.controls[google.maps.ControlPosition.BOTTOM_CENTER].push(document.getElementById('center-controls'));
+        }
+
+        function showPosition(position) {
+            var pos = new google.maps.LatLng(position.coords.latitude, position.coords.longitude);
+            map = new google.maps.Map(document.getElementById('map'), {
+                center: pos,
+                zoom: 8
+            });
+            var icon = {
+                url: "../static/dragon.png", // url
+                scaledSize: new google.maps.Size(50, 50), // scaled size
+                origin: new google.maps.Point(0, 0), // origin
+                anchor: new google.maps.Point(0, 0) // anchor
+            };
+            var marker = new google.maps.Marker({
+                map: map,
+                position: pos,
+                icon: icon,
+                animation: google.maps.Animation.BOUNCE
+            });
+            userMarker = marker;
+            //center it to user location
+            map.panTo(marker.getPosition());
+
+            //open then marker with user info
+            marker.addListener('click', function () {
+                map.setZoom(8);
+                map.setCenter(marker.getPosition());
+                showUserInfo(marker);
+            });
+
+            addControls();
+        }
+
+        function centerMyLocation() {
+            map.setZoom(8);
+            map.panTo(userMarker.getPosition());
+        }
+
+        function successPosition() {
+            navigator.geolocation.getCurrentPosition(showPosition);
+        };
+
+        function errorPosition() {
+            //document.getElementById('map').append(new Text("Please allow site to access your location"));
+            var settings = {
+                "url": "/getIPaddress",
+                "method": "GET"
+            }
+            $.ajax(settings).done(function (response) {
+                data = JSON.parse(response);
+                //position = new google.maps.LatLng(data.lat,data.long);
+                position = {
+                    'coords':{
+                        'latitude': data.lat,
+                        'longitude': data.lon
+                    }
+                }
+                showPosition(position);
+            });
+        };
+
+        function refreshPage() {
+            toggleState("btnPhotos");
+        }
+
+        function toggleState(id) {
+            $('#' + id + '0').toggle();
+            $('#' + id + '1').toggle();
+        }
+    </script>
+</head>
+
+<body>
+    <div id="map" style="width:100%;height:100%"></div>
+    <div id="logo">
+        <img src="../static/logo.png" alt="lion Analyst" width="120px">
+    </div>
+    <div id="center-controls">
+        <button id="btnLocate" class="rounds" onclick="centerMyLocation()" title="My location">
+            <i id="btnLocate1" class="fa fa-bullseye fa-2x"></i>
+            <i id="btnLocate0" class="fa fa-refresh fa-spin fa-2x" style="display:none"></i>
+        </button>
+        <button id="btnPhotos" class="roundl" onclick="refreshPage()" title="Get tweets from map center">
+            <i id="btnPhotos1" class="fa fa-refresh fa-3x"></i>
+            <i id="btnPhotos0" class="fa fa-refresh fa-spin fa-3x" style="display:none"></i>
+        </button>
+        <button id="btnSearch" class="rounds" onclick="toggleSearch()" title="Search">
+            <i id="btnSearch1" class="fa fa-search fa-2x"></i>
+            <i id="btnSearch0" class="fa fa-close fa-2x" style="display:none"></i>
+        </button>
+    </div>
+    <script>
+        function myMap() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(showPosition, errorPosition);
+            } else {
+                errorPosition();
+            }
+        }
+    </script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyB4kKAY3fC9FSM6EIZlkBg6QvhjFTtTnVc&callback=myMap" async defer></script>
+</body>
+
+</html>
